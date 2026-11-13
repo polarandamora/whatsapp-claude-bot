@@ -1,0 +1,23 @@
+name = "whatsapp-claude-bot"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Memòria de les converses. Substituïu l'id pel que retorni:
+#   npx wrangler kv namespace create CONVERSES
+[[kv_namespaces]]
+binding = "CONVERSES"
+id = "POSEU_AQUI_L_ID_DEL_KV"
+
+[vars]
+MODEL = "claude-haiku-5-5"
+GRAPH_VERSION = "v23.0"
+HISTORY_TURNS = "10"
+SYSTEM_PROMPT = "Ets l'assistent virtual d'atenció al client de [Nom de l'Empresa]. Respon sempre en català, de manera amable, clara i breu (ideal per llegir des del mòbil, màxim 3-4 frases). Si no saps una resposta, indica que un agent humà s'hi posarà en contacte aviat. No inventis preus, horaris ni dades que no et donin."
+
+# Secrets (NO van aquí). Es creen amb: npx wrangler secret put NOM
+#   ANTHROPIC_API_KEY  -> clau de platform.claude.com
+#   WHATSAPP_TOKEN     -> token d'accés de Meta (temporal o permanent)
+#   PHONE_NUMBER_ID    -> identificador del número de telèfon de Meta
+#   APP_SECRET         -> Clau secreta de l'app (Configuració de l'app > Bàsica)
+#   VERIFY_TOKEN       -> una paraula qualsevol que inventeu, la mateixa que poseu a Meta

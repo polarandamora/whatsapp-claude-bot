@@ -1,0 +1,440 @@
+<title>Guia de prova WhatsApp + Claude</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400&display=swap">
+<style>
+/* Layout: una columna de lectura; els passos de terminal en blocs copiables */
+:root{
+  --bg:#f7f8f6; --surface:#ffffff; --fg:#1d2420; --muted:#5d6a63; --line:#dfe4e0;
+  --accent:#1f7a53; --tip-bg:#e3f4ea; --tip-line:#2f9a68; --warn-bg:#fff1d6; --warn-line:#c98a12;
+  --code-bg:#eef1ee; --term-bg:#18201c; --term-fg:#dcefe4;
+  --f-display:"Space Grotesk",system-ui,sans-serif; --f-body:"Inter",system-ui,sans-serif; --f-mono:"JetBrains Mono",ui-monospace,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#141917; --surface:#1b211e; --fg:#e4ebe7; --muted:#9aa8a0; --line:#2c3531;
+  --accent:#5cc995; --tip-bg:#163326; --tip-line:#4fc28a; --warn-bg:#3a2d0f; --warn-line:#e0a93a;
+  --code-bg:#232b27; --term-bg:#0e1311; --term-fg:#dcefe4; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#141917; --surface:#1b211e; --fg:#e4ebe7; --muted:#9aa8a0; --line:#2c3531;
+  --accent:#5cc995; --tip-bg:#163326; --tip-line:#4fc28a; --warn-bg:#3a2d0f; --warn-line:#e0a93a;
+  --code-bg:#232b27; --term-bg:#0e1311; --term-fg:#dcefe4; color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font:15px/1.65 var(--f-body)}
+.wrap{max-width:780px;margin:0 auto;padding-block:32px 64px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+h1,h2,h3{font-family:var(--f-display);text-wrap:balance;line-height:1.25}
+h1{font-size:1.9rem;margin:0 0 .3em}
+h2{font-size:1.3rem;margin:2.2em 0 .6em;padding-top:1em;border-top:1px solid var(--line)}
+h3{font-size:1.05rem;margin:1.5em 0 .4em;color:var(--accent)}
+.lead{color:var(--muted);font-size:1.02rem;margin:0 0 1.2em}
+code{font-family:var(--f-mono);font-size:.86em;background:var(--code-bg);padding:.1em .35em;border-radius:4px;overflow-wrap:anywhere}
+a{color:var(--accent)}
+li{margin:.3em 0}
+.flow{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:1em 0 1.4em;font:500 .85rem var(--f-body)}
+.flow span{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:.35em .7em}
+.flow i{font-style:normal;color:var(--muted)}
+.box{border-left:3px solid var(--tip-line);background:var(--tip-bg);padding:.7em 1em;margin:1em 0;border-radius:0 6px 6px 0}
+.box.warn{border-color:var(--warn-line);background:var(--warn-bg)}
+.box>:first-child{margin-top:0}.box>:last-child{margin-bottom:0}
+.term{position:relative;margin:.7em 0}
+.term pre{background:var(--term-bg);color:var(--term-fg);font:13px/1.55 var(--f-mono);padding:12px 14px;padding-right:76px;border-radius:8px;overflow-x:auto;margin:0;white-space:pre}
+.copy{position:absolute;top:8px;right:8px;font:600 .72rem var(--f-body);background:rgba(255,255,255,.12);color:var(--term-fg);border:1px solid rgba(255,255,255,.18);border-radius:5px;padding:4px 9px;cursor:pointer}
+.copy:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+details{background:var(--surface);border:1px solid var(--line);border-radius:8px;margin:.8em 0}
+details summary{cursor:pointer;padding:.7em 1em;font-weight:600}
+details summary code{font-weight:400}
+details .term{margin:0 .7em .7em}
+details .term pre{max-height:520px;overflow:auto}
+.tbl{overflow-x:auto;margin:.8em 0}
+table{border-collapse:collapse;width:100%;font-size:.9rem}
+th,td{text-align:left;vertical-align:top;padding:.55em .7em;border-bottom:1px solid var(--line)}
+th{font-family:var(--f-display);font-weight:600;color:var(--muted);font-size:.8rem;letter-spacing:.04em;text-transform:uppercase}
+td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
+.changes{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 18px;margin:0 0 24px;font-size:.92rem}
+.changes b{font-family:var(--f-display)}
+.changes ul{margin:.4em 0 0;padding-left:1.2em}
+</style>
+
+<div class="wrap">
+
+<div class="changes">
+<b>Versió 2: sense Make.</b> El bot ara és un petit programa a Cloudflare Workers (gratuït).
+<ul>
+<li>Ja no cal Make: desapareixen el límit de 1.000 crèdits i la configuració de mòduls.</li>
+<li>El bot <b>recorda la conversa</b> (els últims 10 torns, durant 24 h).</li>
+<li>Ignora els avisos d'estat i els missatges duplicats, i comprova que les peticions vinguin de Meta.</li>
+<li>Model: Claude Haiku 5.5. Cost aproximat: 0,0002 $ per resposta.</li>
+</ul>
+</div>
+
+<h1>Guia de Prova: Connexió de WhatsApp Business API amb Claude (Anthropic)</h1>
+<p class="lead">Passos per muntar un <b>entorn de proves funcional i legal</b> a cost pràcticament zero, amb el número de proves oficial de Meta i un bot propi allotjat a Cloudflare. Temps estimat: 45 minuts.</p>
+
+<div class="flow" aria-label="Flux del missatge">
+<span>📱 WhatsApp</span><i>→</i><span>Meta (Cloud API)</span><i>→</i><span>Cloudflare Worker</span><i>→</i><span>Claude</span><i>→</i><span>Worker</span><i>→</i><span>📱 Resposta</span>
+</div>
+
+<h2>1. Requisits i comptes necessaris</h2>
+<div class="tbl"><table>
+<thead><tr><th>Què</th><th>Per a què</th><th>Cost</th></tr></thead>
+<tbody>
+<tr><td><b>Meta for Developers</b><br><code>developers.facebook.com</code></td><td>Número de proves de WhatsApp i webhook. Cal un compte de Facebook i una cartera d'empresa (<i>Business portfolio</i>); si no en teniu, Meta la crea durant la configuració.</td><td class="num">0 €</td></tr>
+<tr><td><b>Claude Platform</b><br><code>platform.claude.com</code></td><td>Clau d'API per cridar Claude.</td><td class="num">5 $ + IVA<br>(recàrrega mínima)</td></tr>
+<tr><td><b>Cloudflare</b><br><code>dash.cloudflare.com</code></td><td>On s'executa el bot (Workers + KV per a la memòria).</td><td class="num">0 €</td></tr>
+<tr><td><b>Node.js 20 o superior</b></td><td>Per instal·lar i publicar el bot des de la terminal.</td><td class="num">0 €</td></tr>
+</tbody></table></div>
+
+<h2>2. Configuració a Meta (WhatsApp Cloud API)</h2>
+<ol>
+<li>Aneu a <a href="https://developers.facebook.com/" target="_blank" rel="noopener">developers.facebook.com</a> &gt; <b>Les meves aplicacions</b> &gt; <b>Crea una aplicació</b>.</li>
+<li>Trieu el cas d'ús <b>Connecta amb els clients a través de WhatsApp</b> (si no apareix: <b>Altres</b> &gt; <b>Negoci</b>). Poseu-li un nom (ex: <code>Prova Bot Claude</code>), vinculeu-hi la cartera d'empresa i creeu l'app.</li>
+<li>Al menú esquerre: <b>WhatsApp</b> &gt; <b>Configuració de l'API</b> (<i>API Setup</i>). Anoteu aquestes dades en un lloc segur:
+<ul>
+<li><b>Token d'accés temporal</b> (<i>Genera el token d'accés</i>). Caduca cada 24 h; per a proves de més d'un dia, vegeu el punt 8.</li>
+<li><b>Phone Number ID</b> (identificador del número de proves <code>+1 555...</code>). Atenció: no és el número de telèfon, és un ID llarg.</li>
+</ul></li>
+<li>A <b>A</b> / <b>To</b> &gt; <i>Administra la llista de números de telèfon</i>, afegiu els mòbils de l'equip (màxim 5) i confirmeu el codi que arriba per WhatsApp. Només aquests números podran parlar amb el bot.</li>
+<li>A <b>Configuració de l'app</b> &gt; <b>Bàsica</b>, copieu la <b>Clau secreta de l'app</b> (<i>App Secret</i>). El bot la fa servir per comprovar que els missatges vénen de Meta.</li>
+<li>Inventeu una paraula de verificació qualsevol (ex: <code>prova-bot-2026</code>). Serà el <b>VERIFY_TOKEN</b>.</li>
+</ol>
+<p>El webhook de Meta es configura al punt 6, quan el bot ja estigui publicat.</p>
+
+<h2>3. Clau d'API de Claude</h2>
+<ol>
+<li>Entreu a <a href="https://platform.claude.com/" target="_blank" rel="noopener">platform.claude.com</a>, afegiu crèdit (mínim 5 $) a <b>Billing</b>.</li>
+<li>A <b>API Keys</b> &gt; <b>Create Key</b>, poseu-li un nom (ex: <code>bot-whatsapp</code>) i copieu-la. Només es mostra una vegada.</li>
+<li>Recomanat: a <b>Limits</b>, poseu un límit de despesa mensual (ex: 10 $) per evitar sorpreses.</li>
+</ol>
+
+<h2>4. Preparar el projecte</h2>
+<p>El projecte són 3 fitxers. Creeu una carpeta <code>whatsapp-claude-bot</code> amb aquesta estructura i copieu-hi el contingut de cada fitxer:</p>
+<div class="term"><button class="copy" type="button">Copia</button><pre>whatsapp-claude-bot/
+├── package.json
+├── wrangler.toml
+└── src/
+    └── index.js</pre></div>
+
+<details><summary><code>package.json</code></summary>
+<div class="term"><button class="copy" type="button">Copia</button><pre>{
+  "name": "whatsapp-claude-bot",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "logs": "wrangler tail",
+    "test": "node test/local-test.mjs"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "1.3.0"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}</pre></div></details>
+
+<details><summary><code>wrangler.toml</code>: configuració i instruccions del bot</summary>
+<div class="term"><button class="copy" type="button">Copia</button><pre>name = "whatsapp-claude-bot"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Memòria de les converses. Substituïu l'id pel que retorni:
+#   npx wrangler kv namespace create CONVERSES
+[[kv_namespaces]]
+binding = "CONVERSES"
+id = "POSEU_AQUI_L_ID_DEL_KV"
+
+[vars]
+MODEL = "claude-haiku-5-5"
+GRAPH_VERSION = "v23.0"
+HISTORY_TURNS = "10"
+SYSTEM_PROMPT = "Ets l'assistent virtual d'atenció al client de [Nom de l'Empresa]. Respon sempre en català, de manera amable, clara i breu (ideal per llegir des del mòbil, màxim 3-4 frases). Si no saps una resposta, indica que un agent humà s'hi posarà en contacte aviat. No inventis preus, horaris ni dades que no et donin."
+
+# Secrets (NO van aquí). Es creen amb: npx wrangler secret put NOM
+#   ANTHROPIC_API_KEY  -&gt; clau de platform.claude.com
+#   WHATSAPP_TOKEN     -&gt; token d'accés de Meta (temporal o permanent)
+#   PHONE_NUMBER_ID    -&gt; identificador del número de telèfon de Meta
+#   APP_SECRET         -&gt; Clau secreta de l'app (Configuració de l'app &gt; Bàsica)
+#   VERIFY_TOKEN       -&gt; una paraula qualsevol que inventeu, la mateixa que poseu a Meta</pre></div></details>
+
+<details><summary><code>src/index.js</code>: el bot (≈177 línies comentades)</summary>
+<div class="term"><button class="copy" type="button">Copia</button><pre>// Bot de WhatsApp amb Claude, sobre Cloudflare Workers.
+// Flux: Meta (webhook) -&gt; aquest Worker -&gt; Claude -&gt; WhatsApp Cloud API.
+
+import Anthropic from "@anthropic-ai/sdk";
+
+const HISTORY_TTL_SECONDS = 24 * 60 * 60; // la conversa s'oblida després de 24 h sense missatges
+const SEEN_IDS_KEPT = 20; // IDs de missatges recordats per evitar respondre dues vegades
+const RESET_WORDS = ["/reset", "reset", "reinicia"];
+
+export default {
+  async fetch(request, env, ctx) {
+    const url = new URL(request.url);
+
+    // 1) Verificació del webhook: Meta la fa una vegada, en desar la Callback URL.
+    if (request.method === "GET") {
+      const mode = url.searchParams.get("hub.mode");
+      const token = url.searchParams.get("hub.verify_token");
+      if (mode === "subscribe" &amp;&amp; token &amp;&amp; token === env.VERIFY_TOKEN) {
+        return new Response(url.searchParams.get("hub.challenge") ?? "", { status: 200 });
+      }
+      return new Response("Forbidden", { status: 403 });
+    }
+
+    if (request.method !== "POST") {
+      return new Response("Method Not Allowed", { status: 405 });
+    }
+
+    // 2) Comprovar que la petició ve realment de Meta (signatura amb l'App Secret).
+    const raw = await request.text();
+    const signature = request.headers.get("x-hub-signature-256");
+    if (!(await isValidSignature(raw, signature, env.APP_SECRET))) {
+      console.warn("Signatura invàlida: petició rebutjada");
+      return new Response("Invalid signature", { status: 401 });
+    }
+
+    let body;
+    try {
+      body = JSON.parse(raw);
+    } catch {
+      return new Response("Bad Request", { status: 400 });
+    }
+
+    // 3) Respondre 200 de seguida (si no, Meta reintenta) i treballar en segon pla.
+    ctx.waitUntil(
+      handleWebhook(body, env).catch((err) =&gt; console.error("Error processant el webhook:", err))
+    );
+    return new Response("OK", { status: 200 });
+  },
+};
+
+export async function handleWebhook(body, env) {
+  for (const entry of body.entry ?? []) {
+    for (const change of entry.changes ?? []) {
+      const value = change.value ?? {};
+      // Els avisos d'estat (enviat, entregat, llegit) arriben a `statuses`, no a `messages`: s'ignoren.
+      for (const message of value.messages ?? []) {
+        await handleMessage(message, env);
+      }
+    }
+  }
+}
+
+async function handleMessage(message, env) {
+  const from = message.from; // número de l'usuari, en format internacional sense "+"
+  const key = `conv:${from}`;
+  const state = (await env.CONVERSES.get(key, "json")) ?? { history: [], seen: [] };
+
+  // Evitar respostes duplicades si Meta reenvia el mateix missatge.
+  if (state.seen.includes(message.id)) {
+    console.log(`Missatge ${message.id} ja processat, s'ignora`);
+    return;
+  }
+  state.seen = [...state.seen, message.id].slice(-SEEN_IDS_KEPT);
+
+  if (message.type !== "text") {
+    await sendWhatsAppText(env, from, "De moment només puc llegir missatges de text. Me'l pots escriure? 🙂");
+    await saveState(env, key, state);
+    return;
+  }
+
+  const text = (message.text?.body ?? "").trim();
+  if (!text) return;
+
+  if (RESET_WORDS.includes(text.toLowerCase())) {
+    state.history = [];
+    await sendWhatsAppText(env, from, "Fet! He oblidat la conversa anterior. En què et puc ajudar?");
+    await saveState(env, key, state);
+    return;
+  }
+
+  const messages = [...state.history, { role: "user", content: text }];
+
+  let reply;
+  try {
+    reply = await askClaude(env, messages);
+  } catch (err) {
+    console.error("Error cridant Claude:", err);
+    await sendWhatsAppText(env, from, "Ara mateix no puc respondre. Torna-ho a provar d'aquí a una estona, si us plau.");
+    await saveState(env, key, state); // es desa l'ID per no reintentar en bucle, però no l'historial
+    return;
+  }
+
+  await sendWhatsAppText(env, from, reply);
+
+  // Guardar els últims torns (parells usuari/assistent) perquè el bot recordi el context.
+  const maxMessages = Math.max(0, Number(env.HISTORY_TURNS ?? 10)) * 2;
+  state.history = [...messages, { role: "assistant", content: reply }].slice(-maxMessages);
+  await saveState(env, key, state);
+}
+
+async function askClaude(env, messages) {
+  const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
+  const response = await client.messages.create({
+    model: env.MODEL ?? "claude-haiku-5-5",
+    max_tokens: 1024,
+    // Xat senzill: sense raonament intern i esforç baix = respostes ràpides i barates.
+    thinking: { type: "disabled" },
+    output_config: { effort: "low" },
+    system: env.SYSTEM_PROMPT,
+    messages,
+  });
+
+  if (response.stop_reason === "refusal") {
+    return "Ho sento, no puc ajudar-te amb això. Un agent de l'equip es posarà en contacte amb tu.";
+  }
+
+  const text = response.content
+    .filter((block) =&gt; block.type === "text")
+    .map((block) =&gt; block.text)
+    .join("")
+    .trim();
+
+  return text || "Perdona, no t'he entès. Ho pots dir d'una altra manera?";
+}
+
+async function sendWhatsAppText(env, to, body) {
+  const version = env.GRAPH_VERSION ?? "v23.0";
+  const res = await fetch(`https://graph.facebook.com/${version}/${env.PHONE_NUMBER_ID}/messages`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${env.WHATSAPP_TOKEN}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      to,
+      type: "text",
+      text: { body: body.slice(0, 4096) }, // límit de WhatsApp per missatge de text
+    }),
+  });
+  if (!res.ok) {
+    // Error típic: 401 = token caducat; 131030 = número no afegit a la llista de proves.
+    console.error(`Error enviant a WhatsApp (${res.status}):`, await res.text());
+  }
+}
+
+async function saveState(env, key, state) {
+  await env.CONVERSES.put(key, JSON.stringify(state), { expirationTtl: HISTORY_TTL_SECONDS });
+}
+
+export async function isValidSignature(raw, header, secret) {
+  if (!header || !secret || !header.startsWith("sha256=")) return false;
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const mac = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(raw));
+  const expected = "sha256=" + [...new Uint8Array(mac)].map((b) =&gt; b.toString(16).padStart(2, "0")).join("");
+  // Comparació de temps constant
+  if (expected.length !== header.length) return false;
+  let diff = 0;
+  for (let i = 0; i &lt; expected.length; i++) diff |= expected.charCodeAt(i) ^ header.charCodeAt(i);
+  return diff === 0;
+}</pre></div></details>
+
+<p>Després, des de la carpeta del projecte, instal·leu les dependències:</p>
+<div class="term"><button class="copy" type="button">Copia</button><pre>npm install</pre></div>
+
+<h2>5. Publicar el bot a Cloudflare</h2>
+<h3>5.1 Iniciar sessió</h3>
+<p>Obre el navegador per autoritzar la terminal. Si no teniu compte de Cloudflare, el podeu crear en aquest moment (gratuït).</p>
+<div class="term"><button class="copy" type="button">Copia</button><pre>npx wrangler login</pre></div>
+
+<h3>5.2 Crear la memòria de converses (KV)</h3>
+<div class="term"><button class="copy" type="button">Copia</button><pre>npx wrangler kv namespace create CONVERSES</pre></div>
+<p>La comanda mostra un <code>id</code> (una cadena llarga). Enganxeu-lo a <code>wrangler.toml</code>, en lloc de <code>POSEU_AQUI_L_ID_DEL_KV</code>.</p>
+
+<h3>5.3 Guardar les claus com a secrets</h3>
+<p>Cada comanda us demana el valor; enganxeu-lo i premeu Enter. Les claus queden xifrades a Cloudflare i <b>no apareixen enlloc del codi</b>.</p>
+<div class="term"><button class="copy" type="button">Copia</button><pre>npx wrangler secret put ANTHROPIC_API_KEY
+npx wrangler secret put WHATSAPP_TOKEN
+npx wrangler secret put PHONE_NUMBER_ID
+npx wrangler secret put APP_SECRET
+npx wrangler secret put VERIFY_TOKEN</pre></div>
+<div class="box"><p>La primera vegada, Wrangler pot preguntar si voleu crear el Worker. Responeu que sí.</p></div>
+
+<h3>5.4 Publicar</h3>
+<div class="term"><button class="copy" type="button">Copia</button><pre>npx wrangler deploy</pre></div>
+<p>Al final mostra la URL del bot, semblant a <code>https://whatsapp-claude-bot.el-vostre-subdomini.workers.dev</code>. Copieu-la per al pas següent.</p>
+
+<h2>6. Connectar el webhook de Meta</h2>
+<ol>
+<li>A Meta for Developers: <b>WhatsApp</b> &gt; <b>Configuració</b> (<i>Configuration</i>) &gt; <b>Webhook</b> &gt; <b>Edita</b>.</li>
+<li><b>URL de devolució de trucada</b> (<i>Callback URL</i>): la URL del Worker del pas 5.4.</li>
+<li><b>Token de verificació</b>: la mateixa paraula que heu posat a <code>VERIFY_TOKEN</code>.</li>
+<li>Feu clic a <b>Verifica i desa</b>. Si dona error, vegeu la taula del punt 9.</li>
+<li>A <b>Camps del webhook</b>, busqueu <code>messages</code> i activeu <b>Subscriu</b>.</li>
+</ol>
+
+<h2>7. Provar-ho</h2>
+<ol>
+<li>En una terminal, obriu els logs en directe per veure què passa:
+<div class="term"><button class="copy" type="button">Copia</button><pre>npx wrangler tail</pre></div></li>
+<li>Des d'un mòbil autoritzat, envieu un WhatsApp al número <code>+1 555...</code> de Meta.</li>
+<li>En pocs segons rebreu la resposta de Claude. Feu una segona pregunta relacionada: el bot recorda el context.</li>
+<li>Per començar una conversa de zero, escriviu <code>reset</code>.</li>
+</ol>
+
+<h3>Personalitzar el bot</h3>
+<ul>
+<li><b>Instruccions i to:</b> editeu <code>SYSTEM_PROMPT</code> a <code>wrangler.toml</code>. Podeu afegir-hi horaris, serveis, preus o preguntes freqüents de l'empresa.</li>
+<li><b>Memòria:</b> <code>HISTORY_TURNS</code> (torns recordats, per defecte 10).</li>
+<li>Després de cada canvi, torneu a publicar amb <code>npx wrangler deploy</code>.</li>
+</ul>
+
+<h2>8. Token permanent (per a proves de més d'un dia)</h2>
+<p>El token temporal caduca en 24 h i el bot deixa de respondre (als logs veureu un error 401). Per evitar-ho:</p>
+<ol>
+<li>A <b>Meta Business Suite</b> &gt; <b>Configuració del negoci</b> &gt; <b>Usuaris del sistema</b>, creeu un usuari del sistema (rol administrador).</li>
+<li>Assigneu-li l'app i el compte de WhatsApp (<i>Afegeix actius</i>).</li>
+<li><b>Genera un token nou</b>: trieu l'app, caducitat <b>Mai</b>, i els permisos <code>whatsapp_business_messaging</code> i <code>whatsapp_business_management</code>.</li>
+<li>Substituïu el token a Cloudflare (s'aplica a l'instant, sense tornar a publicar):
+<div class="term"><button class="copy" type="button">Copia</button><pre>npx wrangler secret put WHATSAPP_TOKEN</pre></div></li>
+</ol>
+
+<h2>9. Problemes freqüents</h2>
+<div class="tbl"><table>
+<thead><tr><th>Símptoma</th><th>Causa probable</th><th>Solució</th></tr></thead>
+<tbody>
+<tr><td>«Verifica i desa» falla a Meta</td><td>El <code>VERIFY_TOKEN</code> no coincideix, o el Worker no està publicat.</td><td>Torneu a fer <code>secret put VERIFY_TOKEN</code> amb la paraula exacta i <code>deploy</code>.</td></tr>
+<tr><td>Als logs: <code>Signatura invàlida</code></td><td><code>APP_SECRET</code> incorrecte.</td><td>Copieu-lo de nou de <i>Configuració de l'app &gt; Bàsica</i>.</td></tr>
+<tr><td>Als logs: <code>Error enviant a WhatsApp (401)</code></td><td>Token de Meta caducat.</td><td>Genereu-ne un de nou o feu el punt 8.</td></tr>
+<tr><td>Als logs: error <code>131030</code></td><td>El número que escriu no és a la llista de proves.</td><td>Afegiu-lo al pas 2.4.</td></tr>
+<tr><td>Als logs: <code>Error cridant Claude</code></td><td>Clau d'API incorrecta o sense crèdit.</td><td>Reviseu la clau i el saldo a platform.claude.com.</td></tr>
+<tr><td>No apareix res als logs</td><td>El camp <code>messages</code> no està subscrit.</td><td>Reviseu el pas 6.5.</td></tr>
+</tbody></table></div>
+
+<h2>10. Costos de referència</h2>
+<div class="tbl"><table>
+<thead><tr><th>Servei</th><th>Gratuït fins a</th><th>Després</th></tr></thead>
+<tbody>
+<tr><td>Cloudflare Workers</td><td class="num">100.000 peticions/dia</td><td>Pla de pagament: 5 $/mes</td></tr>
+<tr><td>Cloudflare KV (memòria)</td><td class="num">1.000 escriptures/dia ≈ 1.000 missatges/dia</td><td>Inclòs al pla de 5 $/mes</td></tr>
+<tr><td>Claude Haiku 5.5</td><td>—</td><td class="num">≈ 0,0002–0,0005 $ per resposta<br>(5 $ ≈ més de 10.000 respostes)</td></tr>
+<tr><td>Meta (WhatsApp)</td><td>Respostes dins de les 24 h des de l'últim missatge del client</td><td>Plantilles fora de la finestra: tarifa per missatge</td></tr>
+</tbody></table></div>
+
+<h2>11. Pas a producció</h2>
+<ul>
+<li><b>Verificar l'empresa</b> a Meta Business Suite (NIF/CIF o documentació fiscal).</li>
+<li><b>Número definitiu</b>: un número nou o el vostre WhatsApp Business actual en mode <i>Coexistència</i>.</li>
+<li><b>Token permanent</b> (punt 8) i <b>mètode de pagament</b> a Meta.</li>
+<li>Si supereu uns 1.000 missatges al dia, passeu al pla Workers de 5 $/mes.</li>
+<li><b>RGPD</b>: informeu els clients que els missatges es processen amb IA (Anthropic) i infraestructura de Cloudflare; reviseu els acords de tractament de dades (DPA) d'Anthropic, Cloudflare i Meta. Durant la prova, no feu servir dades reals de clients.</li>
+</ul>
+
+</div>
+
+<script>
+document.querySelectorAll('.copy').forEach(function(btn){
+  btn.addEventListener('click',function(){
+    var pre=btn.parentNode.querySelector('pre'); var text=pre.textContent;
+    function done(){btn.textContent='Copiat';setTimeout(function(){btn.textContent='Copia'},1500)}
+    function fallback(){var r=document.createRange();r.selectNodeContents(pre);var s=window.getSelection();s.removeAllRanges();s.addRange(r);btn.textContent='Seleccionat'}
+    try{navigator.clipboard.writeText(text).then(done,fallback)}catch(e){fallback()}
+  });
+});
+</script>
