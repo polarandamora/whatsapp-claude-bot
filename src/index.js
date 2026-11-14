@@ -3,6 +3,7 @@
 // Alternativa per a proves: Twilio (sandbox de WhatsApp) -> /twilio -> Claude -> resposta TwiML.
 
 import Anthropic from "@anthropic-ai/sdk";
+import { DEMOS, DEFAULT_DEMO } from "./demos.js";
 
 const HISTORY_TTL_SECONDS = 24 * 60 * 60; // la conversa s'oblida després de 24 h sense missatges
 const SEEN_IDS_KEPT = 20; // IDs de missatges recordats per evitar respondre dues vegades
@@ -170,11 +171,32 @@ async function handleMessage(message, env, send) {
     return;
   }
 
+  // "/demo" llista els negocis; "/demo dentista" canvia de negoci i comença una conversa nova.
+  const demoCommand = text.match(/^\/demos?(?:\s+(\S+))?$/i);
+  if (demoCommand) {
+    const wanted = demoCommand[1]?.toLowerCase();
+    if (wanted && DEMOS[wanted]) {
+      state.demo = wanted;
+      state.history = [];
+      await send(from, DEMOS[wanted].benvinguda);
+    } else {
+      const current = currentDemoKey(state, env);
+      const list = Object.entries(DEMOS)
+        .map(([k, d]) => `• ${k} — ${d.nom}${k === current ? " (actual)" : ""}`)
+        .join("\n");
+      const prefix = wanted ? `No conec la demo "${wanted}".\n\n` : "";
+      await send(from, `${prefix}Demos disponibles:\n${list}\n\nEscriu /demo <nom> per canviar.`);
+    }
+    await saveState(env, key, state);
+    return;
+  }
+
+  const demoKey = currentDemoKey(state, env);
   const messages = [...state.history, { role: "user", content: text }];
 
   let reply;
   try {
-    reply = await askClaude(env, messages);
+    reply = await askClaude(env, messages, { demoKey, from });
   } catch (err) {
     console.error("Error cridant Claude:", err);
     await send(from, "Ara mateix no puc respondre. Torna-ho a provar d'aquí a una estona, si us plau.");
@@ -190,29 +212,153 @@ async function handleMessage(message, env, send) {
   await saveState(env, key, state);
 }
 
-async function askClaude(env, messages) {
+function currentDemoKey(state, env) {
+  if (state.demo && DEMOS[state.demo]) return state.demo;
+  if (env.DEFAULT_DEMO && DEMOS[env.DEFAULT_DEMO]) return env.DEFAULT_DEMO;
+  return DEFAULT_DEMO;
+}
+
+// Normes comunes a tots els negocis (estil i ús de l'eina d'avisos).
+const COMMON_RULES = `
+COM RESPONS
+- Respon en l'idioma del client (català o castellà). Si no ho tens clar, en català.
+- Respostes curtes, pensades per llegir al mòbil: 2-4 frases. Llistes només si et demanen diverses coses.
+- Format de WhatsApp, no Markdown: negreta amb un sol asterisc (*així*), llistes amb guionet. Mai ** ni # ni taules.
+- No inventis productes, serveis, preus, ofertes ni horaris que no surtin a les teves instruccions.
+- Si et pregunten coses que no tenen res a veure amb el negoci, respon breument i torna al tema.
+- Si no saps alguna cosa, digues que ho consultaràs amb el negoci i dona el telèfon de contacte.
+- Fes servir la data i l'hora actuals per dir si el negoci és obert ara, quin dia és "demà", etc.
+
+AVISAR EL NEGOCI (eina notificar_negoci)
+- Quan el client tingui un encàrrec, una reserva o una cita amb totes les dades necessàries i te les hagi confirmat, crida notificar_negoci amb un resum.
+- Crida-la també si el client demana parlar amb una persona, vol fer una queixa o té un problema que no pots resoldre.
+- Abans de cridar-la per un encàrrec, una reserva o una cita, resumeix les dades al client i demana-li que les confirmi.
+- Després digues al client que el negoci ho ha rebut i el contactarà per confirmar-ho. No ho donis mai per confirmat tu.
+- No la cridis per a simples preguntes d'informació.
+`;
+
+const NOTIFY_TOOL = {
+  name: "notificar_negoci",
+  description:
+    "Envia un avís al propietari del negoci amb un encàrrec, una reserva o una cita confirmats pel client, o quan el client vol parlar amb una persona. El propietari el rep al moment i contactarà el client.",
+  strict: true,
+  input_schema: {
+    type: "object",
+    properties: {
+      tipus: {
+        type: "string",
+        enum: ["encarrec", "reserva", "cita", "parlar_amb_persona", "queixa"],
+        description: "Motiu de l'avís.",
+      },
+      nom_client: { type: "string", description: "Nom del client, o cadena buida si no l'ha dit." },
+      resum: {
+        type: "string",
+        description: "Resum clar de tot el que el negoci ha de saber: productes i quantitats, dia i hora, persones, motiu...",
+      },
+    },
+    required: ["tipus", "nom_client", "resum"],
+    additionalProperties: false,
+  },
+};
+
+function nowInMadrid() {
+  return new Intl.DateTimeFormat("ca-ES", {
+    timeZone: "Europe/Madrid",
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date());
+}
+
+async function askClaude(env, messages, { demoKey, from }) {
+  const demo = DEMOS[demoKey];
   const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
-  const response = await client.messages.create({
+  const request = {
     model: env.MODEL ?? "claude-haiku-5-5",
     max_tokens: 1024,
     // Xat senzill: sense raonament intern i esforç baix = respostes ràpides i barates.
     thinking: { type: "disabled" },
     output_config: { effort: "low" },
-    system: env.SYSTEM_PROMPT,
-    messages,
-  });
+    system: [
+      { type: "text", text: demo.instruccions + COMMON_RULES },
+      // L'hora va en un bloc a part, al final: la resta del prompt no canvia entre missatges.
+      { type: "text", text: `Data i hora actuals (Barcelona): ${nowInMadrid()}.` },
+    ],
+    tools: [NOTIFY_TOOL],
+  };
 
-  if (response.stop_reason === "refusal") {
-    return "Ho sento, no puc ajudar-te amb això. Un agent de l'equip es posarà en contacte amb tu.";
+  const convo = [...messages];
+  // Normalment 1 volta (resposta) o 2 (eina + resposta). El límit evita bucles.
+  for (let round = 0; round < 3; round++) {
+    const response = await client.messages.create({ ...request, messages: convo });
+
+    if (response.stop_reason === "refusal") {
+      return "Ho sento, no puc ajudar-te amb això. Un agent de l'equip es posarà en contacte amb tu.";
+    }
+
+    const toolUses = response.content.filter((block) => block.type === "tool_use");
+    if (response.stop_reason !== "tool_use" || toolUses.length === 0) {
+      const text = response.content
+        .filter((block) => block.type === "text")
+        .map((block) => block.text)
+        .join("")
+        .trim();
+      return text || "Perdona, no t'he entès. Ho pots dir d'una altra manera?";
+    }
+
+    const results = [];
+    for (const toolUse of toolUses) {
+      const ok = toolUse.name === NOTIFY_TOOL.name && (await notifyBusiness(env, demo, from, toolUse.input));
+      results.push({
+        type: "tool_result",
+        tool_use_id: toolUse.id,
+        content: ok ? "Avís enviat al negoci." : "No s'ha pogut enviar l'avís.",
+        ...(ok ? {} : { is_error: true }),
+      });
+    }
+    convo.push({ role: "assistant", content: response.content }, { role: "user", content: results });
   }
+  return "Ho he passat al negoci i et contactaran aviat.";
+}
 
-  const text = response.content
-    .filter((block) => block.type === "text")
-    .map((block) => block.text)
-    .join("")
-    .trim();
+const NOTIFY_LABELS = {
+  encarrec: "🛒 Nou encàrrec",
+  reserva: "📅 Nova reserva",
+  cita: "📅 Nova petició de cita",
+  parlar_amb_persona: "🙋 Un client vol parlar amb una persona",
+  queixa: "⚠️ Queixa d'un client",
+};
 
-  return text || "Perdona, no t'he entès. Ho pots dir d'una altra manera?";
+// Envia l'avís per Telegram (TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID). Sense configurar, només el registra al log.
+async function notifyBusiness(env, demo, from, { tipus, nom_client, resum }) {
+  const text = [
+    `${NOTIFY_LABELS[tipus] ?? "🔔 Avís"} — ${demo.nom}`,
+    nom_client ? `Client: ${nom_client}` : null,
+    `WhatsApp: +${from}`,
+    `Hora: ${nowInMadrid()}`,
+    "",
+    resum,
+  ]
+    .filter((line) => line !== null)
+    .join("\n");
+
+  if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_CHAT_ID) {
+    console.log("Avís al negoci (Telegram no configurat):\n" + text);
+    return true;
+  }
+  const res = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ chat_id: env.TELEGRAM_CHAT_ID, text }),
+  });
+  if (!res.ok) {
+    console.error(`Error enviant l'avís per Telegram (${res.status}):`, await res.text());
+    return false;
+  }
+  return true;
 }
 
 async function sendWhatsAppText(env, to, body) {

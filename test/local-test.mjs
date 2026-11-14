@@ -14,16 +14,24 @@ env.CONVERSES = {
   async put(k, v) { store.set(k, v); },
 };
 
-const sent = [], claudeCalls = [], twilioSent = [];
+const sent = [], claudeCalls = [], twilioSent = [], telegramSent = [];
 globalThis.fetch = async (input, init = {}) => {
   const url = typeof input === "string" ? input : input.url;
   const bodyText = init.body ?? (input.text ? await input.text() : "");
   if (url.includes("api.anthropic.com")) {
     const b = JSON.parse(bodyText); claudeCalls.push(b);
+    const last = b.messages.at(-1);
+    if (typeof last.content === "string" && last.content.includes("CONFIRMO")) {
+      return new Response(JSON.stringify({ id: "msg_t", type: "message", role: "assistant", model: b.model,
+        content: [{ type: "tool_use", id: "tu_1", name: "notificar_negoci",
+          input: { tipus: "encarrec", nom_client: "Anna", resum: "2 fuets per divendres a les 18h" } }],
+        stop_reason: "tool_use", usage: { input_tokens: 10, output_tokens: 5 } }), { status: 200, headers: { "content-type": "application/json" } });
+    }
     return new Response(JSON.stringify({ id: "msg_1", type: "message", role: "assistant", model: b.model,
       content: [{ type: "text", text: `Resposta ${claudeCalls.length}` }], stop_reason: "end_turn",
       usage: { input_tokens: 10, output_tokens: 5 } }), { status: 200, headers: { "content-type": "application/json" } });
   }
+  if (url.includes("api.telegram.org")) { telegramSent.push({ url, body: JSON.parse(bodyText) }); return new Response("{}", { status: 200 }); }
   if (url.includes("api.twilio.com")) { twilioSent.push({ url, auth: init.headers.Authorization, body: Object.fromEntries(new URLSearchParams(bodyText)) }); return new Response("{}", { status: 201 }); }
   if (url.includes("graph.facebook.com")) { sent.push({ url, body: JSON.parse(bodyText) }); return new Response("{}", { status: 200 }); }
   throw new Error("URL inesperada " + url);
@@ -92,6 +100,42 @@ r = await twPost(twMsg("SM2", "", "1"));
 check((await r.text()).includes("només puc llegir"), "Twilio: imatge/àudio avisa que només llegeix text");
 r = await worker.fetch(new Request(TW_URL), env, {});
 check(r.status === 405, "Twilio: GET = 405");
+
+// --- Data i hora, demos i avisos ---
+const sys = claudeCalls[0].system;
+check(Array.isArray(sys) && sys[0].text.includes("Cal Fuet") && sys[0].text.includes("notificar_negoci"), "system: instruccions de la demo per defecte + normes comunes");
+check(/Data i hora actuals \(Barcelona\): .*20\d\d/.test(sys[1].text), "system: inclou la data i l'hora actuals");
+check(claudeCalls[0].tools?.[0]?.name === "notificar_negoci" && claudeCalls[0].tools[0].strict === true, "eina notificar_negoci declarada");
+
+const nc = claudeCalls.length;
+await post(msg("d1", "/demo"));
+check(claudeCalls.length === nc && sent.at(-1).body.text.body.includes("dentista") && sent.at(-1).body.text.body.includes("xarcuteria — Xarcuteria Cal Fuet (actual)"), "/demo llista les demos i marca l'actual");
+await post(msg("d2", "/demo dentista"));
+check(claudeCalls.length === nc && sent.at(-1).body.text.body.includes("Clínica Dental Somriure"), "/demo dentista envia la benvinguda");
+check(JSON.parse(store.get("conv:34600000000")).history.length === 0, "/demo dentista comença una conversa nova");
+await post(msg("d3", "Voldria una neteja"));
+check(claudeCalls.at(-1).system[0].text.includes("Somriure") && !claudeCalls.at(-1).system[0].text.includes("Cal Fuet"), "després de /demo dentista, Claude rep les instruccions del dentista");
+await post(msg("d4", "/demo inventat"));
+check(sent.at(-1).body.text.body.includes('No conec la demo "inventat"'), "/demo amb un nom desconegut avisa");
+await post(msg("d5", "/DEMO Xarcuteria"));
+check(sent.at(-1).body.text.body.includes("Cal Fuet"), "/demo no distingeix majúscules");
+
+// Avís sense Telegram configurat: no falla i la resposta final arriba al client.
+const before = claudeCalls.length;
+await post(msg("n1", "Sí, CONFIRMO l'encàrrec"));
+const followUp = claudeCalls.at(-1).messages;
+check(claudeCalls.length === before + 2 && followUp.at(-1).content[0].type === "tool_result" && followUp.at(-1).content[0].content === "Avís enviat al negoci.", "eina: s'executa i Claude rep el resultat");
+check(sent.at(-1).body.text.body === `Resposta ${before + 2}`, "eina: el client rep la resposta final de Claude");
+check(telegramSent.length === 0, "eina: sense Telegram configurat no s'envia res");
+check(JSON.parse(store.get("conv:34600000000")).history.every((m) => typeof m.content === "string"), "eina: l'historial només desa text");
+
+// Avís amb Telegram configurat.
+env.TELEGRAM_BOT_TOKEN = "tg-token"; env.TELEGRAM_CHAT_ID = "999";
+await post(msg("n2", "CONFIRMO, gràcies"));
+const tg = telegramSent.at(-1);
+check(tg && tg.url.includes("/bottg-token/sendMessage") && tg.body.chat_id === "999", "Telegram: avís enviat al xat configurat");
+check(tg.body.text.includes("Nou encàrrec") && tg.body.text.includes("Cal Fuet") && tg.body.text.includes("Anna")
+  && tg.body.text.includes("+34600000000") && tg.body.text.includes("2 fuets"), "Telegram: l'avís porta tipus, negoci, client, telèfon i resum");
 
 console.log(fails ? `\n${fails} proves fallides` : "\nTotes les proves han passat");
 process.exit(fails ? 1 : 0);
