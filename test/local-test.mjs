@@ -6,6 +6,7 @@ const env = {
   ANTHROPIC_API_KEY: "sk-ant-test", WHATSAPP_TOKEN: "wa-test", PHONE_NUMBER_ID: "111",
   APP_SECRET: "secret", VERIFY_TOKEN: "vt", MODEL: "claude-haiku-5-5", GRAPH_VERSION: "v23.0",
   HISTORY_TURNS: "2", SYSTEM_PROMPT: "Ets un bot de prova.",
+  TWILIO_AUTH_TOKEN: "tw-secret",
 };
 const store = new Map();
 env.CONVERSES = {
@@ -13,7 +14,7 @@ env.CONVERSES = {
   async put(k, v) { store.set(k, v); },
 };
 
-const sent = [], claudeCalls = [];
+const sent = [], claudeCalls = [], twilioSent = [];
 globalThis.fetch = async (input, init = {}) => {
   const url = typeof input === "string" ? input : input.url;
   const bodyText = init.body ?? (input.text ? await input.text() : "");
@@ -23,6 +24,7 @@ globalThis.fetch = async (input, init = {}) => {
       content: [{ type: "text", text: `Resposta ${claudeCalls.length}` }], stop_reason: "end_turn",
       usage: { input_tokens: 10, output_tokens: 5 } }), { status: 200, headers: { "content-type": "application/json" } });
   }
+  if (url.includes("api.twilio.com")) { twilioSent.push({ url, auth: init.headers.Authorization, body: Object.fromEntries(new URLSearchParams(bodyText)) }); return new Response("{}", { status: 201 }); }
   if (url.includes("graph.facebook.com")) { sent.push({ url, body: JSON.parse(bodyText) }); return new Response("{}", { status: 200 }); }
   throw new Error("URL inesperada " + url);
 };
@@ -61,5 +63,35 @@ await post(msg("m5", "", "audio"));
 check(sent.at(-1).body.text.body.includes("només puc llegir"), "àudio: avisa que només llegeix text");
 const n = claudeCalls.length; await post(msg("m6", "reset"));
 check(claudeCalls.length === n && JSON.parse(store.get("conv:34600000000")).history.length === 0, "reset esborra l'historial");
+
+// --- Twilio ---
+const TW_URL = "https://bot.example/twilio";
+const twSign = (params, token = env.TWILIO_AUTH_TOKEN) => crypto.createHmac("sha1", token)
+  .update(TW_URL + Object.keys(params).sort().map((k) => k + params[k]).join("")).digest("base64");
+async function twPost(params, sig) {
+  const waits = [];
+  const res = await worker.fetch(new Request(TW_URL, { method: "POST", body: new URLSearchParams(params).toString(),
+    headers: { "content-type": "application/x-www-form-urlencoded", "x-twilio-signature": sig ?? twSign(params) } }),
+    env, { waitUntil: (p) => waits.push(p) });
+  await Promise.all(waits); return res;
+}
+const twMsg = (sid, body, numMedia = "0") => ({ MessageSid: sid, From: "whatsapp:+34611111111", To: "whatsapp:+14155238886", Body: body, NumMedia: numMedia });
+
+r = await twPost(twMsg("SM1", "Hola"), "signatura-dolenta");
+check(r.status === 401 && twilioSent.length === 0, "Twilio: signatura falsa rebutjada");
+const c0 = claudeCalls.length;
+r = await twPost(twMsg("SM1", "Hola Twilio"));
+let xml = await r.text();
+check(r.status === 200 && xml.includes(`<Message>Resposta ${c0 + 1}</Message>`), "Twilio: resposta de Claude dins del TwiML");
+check(twilioSent.length === 0, "Twilio: no fa servir l'API d'enviament");
+check(claudeCalls.length === c0 + 1 && claudeCalls.at(-1).messages.at(-1).content === "Hola Twilio", "Twilio: missatge passat a Claude");
+check(store.has("conv:34611111111"), "Twilio: conversa desada amb el número en dígits");
+r = await twPost(twMsg("SM1", "Hola Twilio"));
+check(!(await r.text()).includes("<Message>") && claudeCalls.length === c0 + 1, "Twilio: missatge duplicat ignorat");
+r = await twPost(twMsg("SM2", "", "1"));
+check((await r.text()).includes("només puc llegir"), "Twilio: imatge/àudio avisa que només llegeix text");
+r = await worker.fetch(new Request(TW_URL), env, {});
+check(r.status === 405, "Twilio: GET = 405");
+
 console.log(fails ? `\n${fails} proves fallides` : "\nTotes les proves han passat");
 process.exit(fails ? 1 : 0);

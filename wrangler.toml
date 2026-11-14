@@ -7,13 +7,13 @@ compatibility_flags = ["nodejs_compat"]
 #   npx wrangler kv namespace create CONVERSES
 [[kv_namespaces]]
 binding = "CONVERSES"
-id = "POSEU_AQUI_L_ID_DEL_KV"
+id = "34e436c2aa0b425f853e32b626807392"
 
 [vars]
 MODEL = "claude-haiku-5-5"
 GRAPH_VERSION = "v23.0"
 HISTORY_TURNS = "10"
-SYSTEM_PROMPT = "Ets l'assistent virtual d'atenció al client de [Nom de l'Empresa]. Respon sempre en català, de manera amable, clara i breu (ideal per llegir des del mòbil, màxim 3-4 frases). Si no saps una resposta, indica que un agent humà s'hi posarà en contacte aviat. No inventis preus, horaris ni dades que no et donin."
+SYSTEM_PROMPT = "Ets l'assistent virtual d'atenció al client de SharknadosAI. Respon sempre en català, de manera amable, clara i breu (ideal per llegir des del mòbil, màxim 3-4 frases). Si no saps una resposta, indica que un agent humà s'hi posarà en contacte aviat. No inventis preus, horaris ni dades que no et donin."
 
 # Secrets (NO van aquí). Es creen amb: npx wrangler secret put NOM
 #   ANTHROPIC_API_KEY  -> clau de platform.claude.com
@@ -21,3 +21,9 @@ SYSTEM_PROMPT = "Ets l'assistent virtual d'atenció al client de [Nom de l'Empre
 #   PHONE_NUMBER_ID    -> identificador del número de telèfon de Meta
 #   APP_SECRET         -> Clau secreta de l'app (Configuració de l'app > Bàsica)
 #   VERIFY_TOKEN       -> una paraula qualsevol que inventeu, la mateixa que poseu a Meta
+#
+# Alternativa per a proves amb el sandbox de WhatsApp de Twilio (ruta /twilio).
+# Només calen ANTHROPIC_API_KEY i aquest (els de Meta no):
+#   TWILIO_AUTH_TOKEN  -> Auth Token de la consola de Twilio (per comprovar la signatura)
+# La resposta s'envia dins del webhook (TwiML), així que no cal cap número ni Account SID.
+# A Twilio: Sandbox settings > "When a message comes in" = https://<worker>/twilio (POST)

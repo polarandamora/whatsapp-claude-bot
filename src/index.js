@@ -1,5 +1,6 @@
 // Bot de WhatsApp amb Claude, sobre Cloudflare Workers.
 // Flux: Meta (webhook) -> aquest Worker -> Claude -> WhatsApp Cloud API.
+// Alternativa per a proves: Twilio (sandbox de WhatsApp) -> /twilio -> Claude -> resposta TwiML.
 
 import Anthropic from "@anthropic-ai/sdk";
 
@@ -10,6 +11,10 @@ const RESET_WORDS = ["/reset", "reset", "reinicia"];
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+
+    if (url.pathname === "/twilio") {
+      return handleTwilioRequest(request, env);
+    }
 
     // 1) Verificació del webhook: Meta la fa una vegada, en desar la Callback URL.
     if (request.method === "GET") {
@@ -54,13 +59,90 @@ export async function handleWebhook(body, env) {
       const value = change.value ?? {};
       // Els avisos d'estat (enviat, entregat, llegit) arriben a `statuses`, no a `messages`: s'ignoren.
       for (const message of value.messages ?? []) {
-        await handleMessage(message, env);
+        await handleMessage(
+          {
+            id: message.id,
+            from: message.from,
+            isText: message.type === "text",
+            text: message.text?.body ?? "",
+          },
+          env,
+          (to, text) => sendWhatsAppText(env, to, text)
+        );
       }
     }
   }
 }
 
-async function handleMessage(message, env) {
+// --- Twilio (sandbox de WhatsApp) ---
+
+async function handleTwilioRequest(request, env) {
+  if (request.method !== "POST") {
+    return new Response("Method Not Allowed", { status: 405 });
+  }
+  const params = Object.fromEntries(new URLSearchParams(await request.text()));
+  const signature = request.headers.get("x-twilio-signature");
+  if (!(await isValidTwilioSignature(request.url, params, signature, env.TWILIO_AUTH_TOKEN))) {
+    console.warn("Signatura de Twilio invàlida: petició rebutjada");
+    return new Response("Invalid signature", { status: 401 });
+  }
+
+  const message = {
+    id: params.MessageSid,
+    from: (params.From ?? "").replace(/\D/g, ""), // "whatsapp:+34600000000" -> mateix format que Meta
+    isText: Number(params.NumMedia ?? 0) === 0 && Boolean(params.Body),
+    text: params.Body ?? "",
+  };
+
+  // La resposta va dins de la mateixa resposta HTTP (TwiML): no cal l'API d'enviament ni plantilles.
+  // Twilio espera fins a 15 s, prou per a Claude Haiku amb esforç baix.
+  const replies = [];
+  try {
+    await handleMessage(message, env, async (_to, text) => {
+      replies.push(text);
+    });
+  } catch (err) {
+    console.error("Error processant el missatge de Twilio:", err);
+  }
+
+  const twiml = replies
+    .map((text) => `<Message>${escapeXml(text.slice(0, 1600))}</Message>`) // límit de Twilio per missatge
+    .join("");
+  return new Response(`<?xml version="1.0" encoding="UTF-8"?><Response>${twiml}</Response>`, {
+    status: 200,
+    headers: { "Content-Type": "text/xml" },
+  });
+}
+
+function escapeXml(text) {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+// Twilio signa: base64(HMAC-SHA1(auth token, URL + cada paràmetre ordenat com clau+valor)).
+export async function isValidTwilioSignature(url, params, header, authToken) {
+  if (!header || !authToken) return false;
+  const data = url + Object.keys(params).sort().map((k) => k + params[k]).join("");
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(authToken),
+    { name: "HMAC", hash: "SHA-1" },
+    false,
+    ["sign"]
+  );
+  const mac = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(data));
+  const expected = btoa(String.fromCharCode(...new Uint8Array(mac)));
+  return timingSafeEqual(expected, header);
+}
+
+// --- Lògica comuna ---
+
+// `message`: { id, from, isText, text }. `send(to, text)` envia la resposta pel canal corresponent.
+async function handleMessage(message, env, send) {
   const from = message.from; // número de l'usuari, en format internacional sense "+"
   const key = `conv:${from}`;
   const state = (await env.CONVERSES.get(key, "json")) ?? { history: [], seen: [] };
@@ -72,18 +154,18 @@ async function handleMessage(message, env) {
   }
   state.seen = [...state.seen, message.id].slice(-SEEN_IDS_KEPT);
 
-  if (message.type !== "text") {
-    await sendWhatsAppText(env, from, "De moment només puc llegir missatges de text. Me'l pots escriure? 🙂");
+  if (!message.isText) {
+    await send(from, "De moment només puc llegir missatges de text. Me'l pots escriure? 🙂");
     await saveState(env, key, state);
     return;
   }
 
-  const text = (message.text?.body ?? "").trim();
+  const text = message.text.trim();
   if (!text) return;
 
   if (RESET_WORDS.includes(text.toLowerCase())) {
     state.history = [];
-    await sendWhatsAppText(env, from, "Fet! He oblidat la conversa anterior. En què et puc ajudar?");
+    await send(from, "Fet! He oblidat la conversa anterior. En què et puc ajudar?");
     await saveState(env, key, state);
     return;
   }
@@ -95,12 +177,12 @@ async function handleMessage(message, env) {
     reply = await askClaude(env, messages);
   } catch (err) {
     console.error("Error cridant Claude:", err);
-    await sendWhatsAppText(env, from, "Ara mateix no puc respondre. Torna-ho a provar d'aquí a una estona, si us plau.");
+    await send(from, "Ara mateix no puc respondre. Torna-ho a provar d'aquí a una estona, si us plau.");
     await saveState(env, key, state); // es desa l'ID per no reintentar en bucle, però no l'historial
     return;
   }
 
-  await sendWhatsAppText(env, from, reply);
+  await send(from, reply);
 
   // Guardar els últims torns (parells usuari/assistent) perquè el bot recordi el context.
   const maxMessages = Math.max(0, Number(env.HISTORY_TURNS ?? 10)) * 2;
@@ -169,9 +251,13 @@ export async function isValidSignature(raw, header, secret) {
   );
   const mac = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(raw));
   const expected = "sha256=" + [...new Uint8Array(mac)].map((b) => b.toString(16).padStart(2, "0")).join("");
-  // Comparació de temps constant
-  if (expected.length !== header.length) return false;
+  return timingSafeEqual(expected, header);
+}
+
+// Comparació de temps constant
+function timingSafeEqual(a, b) {
+  if (a.length !== b.length) return false;
   let diff = 0;
-  for (let i = 0; i < expected.length; i++) diff |= expected.charCodeAt(i) ^ header.charCodeAt(i);
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
   return diff === 0;
 }
