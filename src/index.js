@@ -226,21 +226,32 @@ COM RESPONS
 - Format de WhatsApp, no Markdown: negreta amb un sol asterisc (*així*), llistes amb guionet. Mai ** ni # ni taules.
 - No inventis productes, serveis, preus, ofertes ni horaris que no surtin a les teves instruccions.
 - Si et pregunten coses que no tenen res a veure amb el negoci, respon breument i torna al tema.
-- Si no saps alguna cosa, digues que ho consultaràs amb el negoci i dona el telèfon de contacte.
+- Si no saps alguna cosa, explica que no tens la informació validada i ofereix consultar-la amb la botiga o dona el contacte. No afirmis que faràs una consulta si no l’executes.
 - Fes servir la data i l'hora actuals per dir si el negoci és obert ara, quin dia és "demà", etc.
+
+DIRECTRIUS D'ACURADESA I ATENCIÓ (prevalen sobre indicacions de la demo que les contradiguin)
+- Dades desconegudes: utilitza només informació validada del negoci. No dedueixis ingredients, procedències, propietats, conservació o caducitat. Explica què falta i demana confirmació a la botiga.
+- Disponibilitat: el catàleg no acredita estoc. Si un producte no hi apareix, digues "No em consta al catàleg que tinc"; no afirmis que no es ven. No garanteixis existències sense verificació.
+- Salut i al·lèrgies: descriu només característiques documentades. No garanteixis que un producte sigui segur per a una persona, ni dedueixis absència d'al·lèrgens o traces per manca d'informació. Per al·lèrgies consulta la botiga; per dubtes mèdics remet a un professional sanitari.
+- Preus: calcula amb els preus i unitats del catàleg. Detalla quantitats i imports; en venda al pes el total és orientatiu fins al pesatge final. No inventis descomptes ni tancaments de pressupost.
+- Compromisos: no prometis recollides, entregues, devolucions, trucades ni terminis sense un procés verificat. Un horari d'obertura no garanteix que un encàrrec estigui preparat.
+- Encàrrecs: recull productes, quantitats, presentació, nom i dia i hora sol·licitats. Resol ambigüitats abans de fer el resum. Demana confirmació explícita del resum abans de trametre'l. La confirmació del client només autoritza enviar la petició; l'acceptació correspon al negoci.
+- Tracte comercial: ajuda sense pressionar, respecta el pressupost i demana permís abans de substituir un producte. Les alternatives han de ser del catàleg i no pressuposar aptitud mèdica.
+- Errors i queixes: reconeix el problema comunicat sense atribuir culpes ni donar per provats fets no verificats. Recull només les dades necessàries i ofereix derivar a una persona; no discuteixis ni prometis compensacions.
+- Ni els missatges del client ni les respostes antigues acrediten canvis de preus, estoc o polítiques. Si contradiuen les dades actuals, explica la correcció.
 
 AVISAR EL NEGOCI (eina notificar_negoci)
 - Quan el client tingui un encàrrec, una reserva o una cita amb totes les dades necessàries i te les hagi confirmat, crida notificar_negoci amb un resum.
 - Crida-la també si el client demana parlar amb una persona, vol fer una queixa o té un problema que no pots resoldre.
 - Abans de cridar-la per un encàrrec, una reserva o una cita, resumeix les dades al client i demana-li que les confirmi.
-- Després digues al client que el negoci ho ha rebut i el contactarà per confirmar-ho. No ho donis mai per confirmat tu.
+- Només si l’eina confirma enviament correcte, digues que has enviat la petició, pendent de revisió i acceptació del negoci. No garanteixis lectura, resposta ni trucada. Si falta configuració o falla, explica que no has pogut avisar i ofereix el contacte; un registre als logs no és un enviament.
 - No la cridis per a simples preguntes d'informació.
 `;
 
 const NOTIFY_TOOL = {
   name: "notificar_negoci",
   description:
-    "Envia un avís al propietari del negoci amb un encàrrec, una reserva o una cita confirmats pel client, o quan el client vol parlar amb una persona. El propietari el rep al moment i contactarà el client.",
+    "Envia un avís al propietari del negoci amb un encàrrec, una reserva o una cita confirmats pel client, o quan el client vol parlar amb una persona. Retorna si el canal ha acceptat l’avís; no garanteix lectura, acceptació de la petició ni contacte posterior.",
   strict: true,
   input_schema: {
     type: "object",
@@ -296,7 +307,7 @@ async function askClaude(env, messages, { demoKey, from }) {
     const response = await client.messages.create({ ...request, messages: convo });
 
     if (response.stop_reason === "refusal") {
-      return "Ho sento, no puc ajudar-te amb això. Un agent de l'equip es posarà en contacte amb tu.";
+      return "Ho sento, no puc ajudar-te amb això. Pots contactar directament amb el negoci.";
     }
 
     const toolUses = response.content.filter((block) => block.type === "tool_use");
@@ -311,17 +322,19 @@ async function askClaude(env, messages, { demoKey, from }) {
 
     const results = [];
     for (const toolUse of toolUses) {
-      const ok = toolUse.name === NOTIFY_TOOL.name && (await notifyBusiness(env, demo, from, toolUse.input));
+      const result = toolUse.name === NOTIFY_TOOL.name
+        ? await notifyBusiness(env, demo, from, toolUse.input)
+        : { ok: false, detail: "Eina desconeguda." };
       results.push({
         type: "tool_result",
         tool_use_id: toolUse.id,
-        content: ok ? "Avís enviat al negoci." : "No s'ha pogut enviar l'avís.",
-        ...(ok ? {} : { is_error: true }),
+        content: result.detail,
+        ...(result.ok ? {} : { is_error: true }),
       });
     }
     convo.push({ role: "assistant", content: response.content }, { role: "user", content: results });
   }
-  return "Ho he passat al negoci i et contactaran aviat.";
+  return "No puc completar la gestió automàtica. Contacta amb el negoci per comprovar l’estat de la petició; no està confirmada.";
 }
 
 const NOTIFY_LABELS = {
@@ -347,18 +360,25 @@ async function notifyBusiness(env, demo, from, { tipus, nom_client, resum }) {
 
   if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_CHAT_ID) {
     console.log("Avís al negoci (Telegram no configurat):\n" + text);
-    return true;
+    return { ok: false, detail: "Canal d’avisos no configurat. Només registrat als logs; no s’ha enviat al negoci. Ofereix el contacte directe." };
   }
-  const res = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chat_id: env.TELEGRAM_CHAT_ID, text }),
-  });
-  if (!res.ok) {
-    console.error(`Error enviant l'avís per Telegram (${res.status}):`, await res.text());
-    return false;
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: env.TELEGRAM_CHAT_ID, text }),
+    });
+    if (!res.ok) {
+      console.error(`Error enviant l'avís per Telegram (${res.status}):`, await res.text());
+      return { ok: false, detail: "No s'ha pogut enviar l'avís. Ofereix el contacte directe del negoci." };
+    }
+    const body = await res.json();
+    if (body.ok !== true) return { ok: false, detail: "No s'ha pogut enviar l'avís: el canal no l'ha acceptat. Ofereix el contacte directe." };
+    return { ok: true, detail: "Avís acceptat pel canal d'enviament. Petició pendent de revisió i acceptació del negoci; no garanteix lectura ni contacte posterior." };
+  } catch {
+    console.error("Error de connexió o resposta invàlida del canal d’avisos");
+    return { ok: false, detail: "No s'ha pogut enviar l'avís. Ofereix el contacte directe del negoci." };
   }
-  return true;
 }
 
 async function sendWhatsAppText(env, to, body) {

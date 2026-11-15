@@ -15,6 +15,7 @@ env.CONVERSES = {
 };
 
 const sent = [], claudeCalls = [], twilioSent = [], telegramSent = [];
+let telegramMode = "ok";
 globalThis.fetch = async (input, init = {}) => {
   const url = typeof input === "string" ? input : input.url;
   const bodyText = init.body ?? (input.text ? await input.text() : "");
@@ -31,7 +32,7 @@ globalThis.fetch = async (input, init = {}) => {
       content: [{ type: "text", text: `Resposta ${claudeCalls.length}` }], stop_reason: "end_turn",
       usage: { input_tokens: 10, output_tokens: 5 } }), { status: 200, headers: { "content-type": "application/json" } });
   }
-  if (url.includes("api.telegram.org")) { telegramSent.push({ url, body: JSON.parse(bodyText) }); return new Response("{}", { status: 200 }); }
+  if (url.includes("api.telegram.org")) { telegramSent.push({ url, body: JSON.parse(bodyText) }); if (telegramMode === "network") throw new Error("Network failure"); return new Response(JSON.stringify({ ok: telegramMode === "ok" }), { status: telegramMode === "http" ? 500 : 200 }); }
   if (url.includes("api.twilio.com")) { twilioSent.push({ url, auth: init.headers.Authorization, body: Object.fromEntries(new URLSearchParams(bodyText)) }); return new Response("{}", { status: 201 }); }
   if (url.includes("graph.facebook.com")) { sent.push({ url, body: JSON.parse(bodyText) }); return new Response("{}", { status: 200 }); }
   throw new Error("URL inesperada " + url);
@@ -124,7 +125,7 @@ check(sent.at(-1).body.text.body.includes("Cal Fuet"), "/demo no distingeix maj�
 const before = claudeCalls.length;
 await post(msg("n1", "Sí, CONFIRMO l'encàrrec"));
 const followUp = claudeCalls.at(-1).messages;
-check(claudeCalls.length === before + 2 && followUp.at(-1).content[0].type === "tool_result" && followUp.at(-1).content[0].content === "Avís enviat al negoci.", "eina: s'executa i Claude rep el resultat");
+check(claudeCalls.length === before + 2 && followUp.at(-1).content[0].type === "tool_result" && followUp.at(-1).content[0].is_error === true && followUp.at(-1).content[0].content.includes("no configurat"), "eina: s'executa i Claude rep el resultat");
 check(sent.at(-1).body.text.body === `Resposta ${before + 2}`, "eina: el client rep la resposta final de Claude");
 check(telegramSent.length === 0, "eina: sense Telegram configurat no s'envia res");
 check(JSON.parse(store.get("conv:34600000000")).history.every((m) => typeof m.content === "string"), "eina: l'historial només desa text");
@@ -136,6 +137,14 @@ const tg = telegramSent.at(-1);
 check(tg && tg.url.includes("/bottg-token/sendMessage") && tg.body.chat_id === "999", "Telegram: avís enviat al xat configurat");
 check(tg.body.text.includes("Nou encàrrec") && tg.body.text.includes("Cal Fuet") && tg.body.text.includes("Anna")
   && tg.body.text.includes("+34600000000") && tg.body.text.includes("2 fuets"), "Telegram: l'avís porta tipus, negoci, client, telèfon i resum");
+
+for (const mode of ["http", "api", "network"]) {
+  telegramMode = mode;
+  await post(msg(`failure-${mode}`, "CONFIRMO"));
+  const result = claudeCalls.at(-1).messages.at(-1).content[0];
+  check(result.is_error === true && result.content.includes("No s'ha pogut"), `Telegram: ${mode} no es declara enviat`);
+  check(!sent.at(-1).body.text.body.includes("et contactaran"), `Telegram: ${mode} no promet contacte`);
+}
 
 console.log(fails ? `\n${fails} proves fallides` : "\nTotes les proves han passat");
 process.exit(fails ? 1 : 0);

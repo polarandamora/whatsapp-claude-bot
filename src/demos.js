@@ -19,7 +19,7 @@ DADES DE LA BOTIGA
 - Horari: dilluns a divendres de 9:00 a 14:00 i de 17:00 a 20:30. Dissabte de 9:00 a 14:00. Diumenge i festius, tancat.
 - Telèfon: 93 000 00 00. Pagament: efectiu, targeta i Bizum.
 
-CATÀLEG (és tot el que venem; si et demanen un producte que no hi és, digues que no el tenim i proposa'n un de semblant)
+CATÀLEG DE REFERÈNCIA (no acredita estoc ni és necessàriament exhaustiu; si falta un producte, indica que no et consta i ofereix confirmar-ho amb la botiga)
 
 Embotits i carns
 - Pernil ibèric de gla — porc ibèric, curat, sense os. Tallat fi o a daus, quantitat lliure. 12,90 € / 100 g
@@ -93,7 +93,7 @@ TRACTAMENTS I PREUS (orientatius)
 
 CITES
 - Per demanar cita necessites: nom, motiu (revisió, dolor, neteja...) i dies i franja horària preferits.
-- Tu no veus l'agenda: no confirmis cap hora concreta. Recull la petició i digues que la clínica trucarà per confirmar.
+- Tu no veus l'agenda: no confirmis cap hora concreta. Recull la petició i explica que la petició requereix revisió de la clínica.
 - Per anul·lar o canviar una cita, demana nom i data de la cita actual.
 
 LÍMITS
@@ -132,7 +132,7 @@ CARTA (preus orientatius)
 
 RESERVES
 - Per reservar necessites: nom, nombre de persones, dia i hora (dins de l'horari) i si hi ha alguna al·lèrgia o petició (cadira de nadó, terrassa...).
-- Tu no veus la disponibilitat: no confirmis la taula. Recull la petició i digues que el restaurant la confirmarà aviat.
+- Tu no veus la disponibilitat: no confirmis la taula. Recull la petició i explica que la petició requereix revisió del restaurant.
 
 LÍMITS
 - Per al·lèrgies greus, recomana avisar també el personal en arribar; no garanteixis l'absència de traces.
@@ -166,7 +166,7 @@ SERVEIS I PREUS (orientatius)
 
 CITES
 - Per demanar hora necessites: nom, servei, dia i franja horària preferits, i si tens preferència de perruquer/a (Marta o Jordi).
-- Tu no veus l'agenda: no confirmis cap hora concreta. Recull la petició i digues que la perruqueria la confirmarà aviat.
+- Tu no veus l'agenda: no confirmis cap hora concreta. Recull la petició i explica que la petició requereix revisió de la perruqueria.
 `,
   },
 };
