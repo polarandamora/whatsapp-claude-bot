@@ -221,7 +221,7 @@ function currentDemoKey(state, env) {
 // Normes comunes a tots els negocis (estil i ús de l'eina d'avisos).
 const COMMON_RULES = `
 COM RESPONS
-- Respon en l'idioma del client (català o castellà). Si no ho tens clar, en català.
+- Respon sempre en l'idioma de l'últim missatge del client (català o castellà), encara que la conversa anterior fos en un altre idioma. Si no ho tens clar, en català.
 - Respostes curtes, pensades per llegir al mòbil: 2-4 frases. Llistes només si et demanen diverses coses.
 - Format de WhatsApp, no Markdown: negreta amb un sol asterisc (*així*), llistes amb guionet. Mai ** ni # ni taules.
 - No inventis productes, serveis, preus, ofertes ni horaris que no surtin a les teves instruccions.
