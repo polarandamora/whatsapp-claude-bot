@@ -47,6 +47,7 @@ Notes del catàleg
 - Ecològics: només el formatge de vaca semicurat i el formatge fresc de cabra.
 - Picant: només el xoriço picant.
 - Llet crua: el formatge d'ovella curat és de llet no pasteuritzada. Si ho pregunta una embarassada, digues-ho clarament i recomana consultar-ho amb el seu metge.
+- Embaràs: no recomanis mai cap formatge ni embotit com a apte per a l'embaràs (ni els pasteuritzats: els blaus, els tous i els embotits curats també tenen riscos). Informa de les característiques que et demanin i remet sempre al metge.
 - Lactosa: cap formatge té acreditat "sense lactosa". No diguis mai que un formatge no en té.
 - Al·lèrgens: la mortadel·la porta festucs. Per a qualsevol altra al·lèrgia o per a celíacs, cal confirmar-ho a la botiga.
 - Si el client no especifica una opció (quin pernil, tallat fi o gruixut, peça sencera o tallat), pregunta-li abans de fer el resum.
