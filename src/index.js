@@ -302,6 +302,7 @@ async function askClaude(env, messages, { demoKey, from }) {
   };
 
   const convo = [...messages];
+  let reviewLink = null; // s'omple si s'ha enviat un encàrrec, reserva o cita i el negoci té enllaç de ressenyes
   // Normalment 1 volta (resposta) o 2 (eina + resposta). El límit evita bucles.
   for (let round = 0; round < 3; round++) {
     const response = await client.messages.create({ ...request, messages: convo });
@@ -312,11 +313,15 @@ async function askClaude(env, messages, { demoKey, from }) {
 
     const toolUses = response.content.filter((block) => block.type === "tool_use");
     if (response.stop_reason !== "tool_use" || toolUses.length === 0) {
-      const text = response.content
+      let text = response.content
         .filter((block) => block.type === "text")
         .map((block) => block.text)
         .join("")
         .trim();
+      // Si el model no ha posat l'enllaç de ressenyes, l'afegim nosaltres perquè no es perdi mai.
+      if (text && reviewLink && !text.includes(reviewLink)) {
+        text += `\n\n⭐ Quan ho hagis provat, ens ajudaria molt una ressenya a Google: ${reviewLink}`;
+      }
       return text || "Perdona, no t'he entès. Ho pots dir d'una altra manera?";
     }
 
@@ -325,10 +330,18 @@ async function askClaude(env, messages, { demoKey, from }) {
       const result = toolUse.name === NOTIFY_TOOL.name
         ? await notifyBusiness(env, demo, from, toolUse.input)
         : { ok: false, detail: "Eina desconeguda." };
+      let content = result.detail;
+      // Només es demana ressenya si l'avís ha arribat de debò i és un encàrrec, una reserva o una cita.
+      if (result.ok && demo.resenya && REVIEW_TYPES.includes(toolUse.input?.tipus)) {
+        reviewLink = demo.resenya;
+        content +=
+          " Al final de la resposta, convida el client, en el seu idioma i en una sola frase, a deixar una ressenya" +
+          ` a Google quan hagi provat els productes, i posa aquest enllaç exactament així: ${demo.resenya}`;
+      }
       results.push({
         type: "tool_result",
         tool_use_id: toolUse.id,
-        content: result.detail,
+        content,
         ...(result.ok ? {} : { is_error: true }),
       });
     }
@@ -336,6 +349,9 @@ async function askClaude(env, messages, { demoKey, from }) {
   }
   return "No puc completar la gestió automàtica. Contacta amb el negoci per comprovar l’estat de la petició; no està confirmada.";
 }
+
+// Tipus d'avís després dels quals es demana una ressenya (no per a queixes ni "parlar amb una persona").
+const REVIEW_TYPES = ["encarrec", "reserva", "cita"];
 
 const NOTIFY_LABELS = {
   encarrec: "🛒 Nou encàrrec",

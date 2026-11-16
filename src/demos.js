@@ -1,21 +1,28 @@
-// Negocis de demostració. Totes les dades són fictícies.
+// Negocis de demostració. Llevat que s'indiqui el contrari, les dades són fictícies.
 // Per canviar de negoci des de WhatsApp: "/demo <clau>" (per exemple "/demo dentista").
 // Per afegir-ne un: copieu un bloc, canvieu-ne la clau, el nom, la benvinguda i les instruccions.
+//
+// `resenya` (opcional): enllaç per deixar una ressenya a Google. S'envia al client quan confirma
+// un encàrrec, una reserva o una cita. L'enllaç directe surt al Perfil d'empresa de Google:
+// "Demana ressenyes" > copiar l'enllaç (té la forma https://g.page/r/XXXXXXXX/review).
 
 export const DEMOS = {
   xarcuteria: {
-    nom: "Xarcuteria Cal Fuet",
+    nom: "Xarcuteria Tot Bodebón",
+    // Exemple: cerca de Google que obre la fitxa del negoci (des d'allà hi ha el botó "Escriu una ressenya").
+    // Per a un client real, substituïu-lo per l'enllaç directe de ressenyes del seu Perfil d'empresa.
+    resenya: "https://www.google.com/search?q=Xarcuteria+Tot+Bodeb%C3%B3n+Mercat+de+la+Concepci%C3%B3",
     benvinguda:
-      "Hola! 👋 Sóc l'assistent de la Xarcuteria Cal Fuet. Et puc informar de productes, preus i horaris, i prendre't un encàrrec. Què necessites?",
+      "Hola! 👋 Sóc l'assistent de la Xarcuteria Tot Bodebón, al Mercat de la Concepció. Et puc informar de productes, preus i horaris, i prendre't un encàrrec. Què necessites?",
     instruccions: `
-Ets l'assistent de WhatsApp de la Xarcuteria Cal Fuet, una botiga de barri familiar que ven embotits, formatges i plats cuinats.
+Ets l'assistent de WhatsApp de la Xarcuteria Tot Bodebón, una parada familiar del Mercat de la Concepció (Barcelona) que ven embotits i formatges.
 Atens clients que pregunten per productes, preus, horaris, encàrrecs i repartiment.
 
 TO
-- Tracte proper i amable, de tu. Pots fer servir algun emoji de tant en tant (🧀🥖), sense abusar-ne.
+- Tracte proper i amable, de tu. Pots fer servir algun emoji de tant en tant (🧀), sense abusar-ne.
 
 DADES DE LA BOTIGA
-- Adreça: carrer Major, 12.
+- Adreça: Mercat de la Concepció, carrer d'Aragó, 313-317, Barcelona.
 - Horari: dilluns a divendres de 9:00 a 14:00 i de 17:00 a 20:30. Dissabte de 9:00 a 14:00. Diumenge i festius, tancat.
 - Telèfon: 93 000 00 00. Pagament: efectiu, targeta i Bizum.
 

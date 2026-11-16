@@ -104,22 +104,22 @@ check(r.status === 405, "Twilio: GET = 405");
 
 // --- Data i hora, demos i avisos ---
 const sys = claudeCalls[0].system;
-check(Array.isArray(sys) && sys[0].text.includes("Cal Fuet") && sys[0].text.includes("notificar_negoci"), "system: instruccions de la demo per defecte + normes comunes");
+check(Array.isArray(sys) && sys[0].text.includes("Tot Bodebón") && sys[0].text.includes("notificar_negoci"), "system: instruccions de la demo per defecte + normes comunes");
 check(/Data i hora actuals \(Barcelona\): .*20\d\d/.test(sys[1].text), "system: inclou la data i l'hora actuals");
 check(claudeCalls[0].tools?.[0]?.name === "notificar_negoci" && claudeCalls[0].tools[0].strict === true, "eina notificar_negoci declarada");
 
 const nc = claudeCalls.length;
 await post(msg("d1", "/demo"));
-check(claudeCalls.length === nc && sent.at(-1).body.text.body.includes("dentista") && sent.at(-1).body.text.body.includes("xarcuteria — Xarcuteria Cal Fuet (actual)"), "/demo llista les demos i marca l'actual");
+check(claudeCalls.length === nc && sent.at(-1).body.text.body.includes("dentista") && sent.at(-1).body.text.body.includes("xarcuteria — Xarcuteria Tot Bodebón (actual)"), "/demo llista les demos i marca l'actual");
 await post(msg("d2", "/demo dentista"));
 check(claudeCalls.length === nc && sent.at(-1).body.text.body.includes("Clínica Dental Somriure"), "/demo dentista envia la benvinguda");
 check(JSON.parse(store.get("conv:34600000000")).history.length === 0, "/demo dentista comença una conversa nova");
 await post(msg("d3", "Voldria una neteja"));
-check(claudeCalls.at(-1).system[0].text.includes("Somriure") && !claudeCalls.at(-1).system[0].text.includes("Cal Fuet"), "després de /demo dentista, Claude rep les instruccions del dentista");
+check(claudeCalls.at(-1).system[0].text.includes("Somriure") && !claudeCalls.at(-1).system[0].text.includes("Tot Bodebón"), "després de /demo dentista, Claude rep les instruccions del dentista");
 await post(msg("d4", "/demo inventat"));
 check(sent.at(-1).body.text.body.includes('No conec la demo "inventat"'), "/demo amb un nom desconegut avisa");
 await post(msg("d5", "/DEMO Xarcuteria"));
-check(sent.at(-1).body.text.body.includes("Cal Fuet"), "/demo no distingeix majúscules");
+check(sent.at(-1).body.text.body.includes("Tot Bodebón"), "/demo no distingeix majúscules");
 
 // Avís sense Telegram configurat: no falla i la resposta final arriba al client.
 const before = claudeCalls.length;
@@ -135,8 +135,12 @@ env.TELEGRAM_BOT_TOKEN = "tg-token"; env.TELEGRAM_CHAT_ID = "999";
 await post(msg("n2", "CONFIRMO, gràcies"));
 const tg = telegramSent.at(-1);
 check(tg && tg.url.includes("/bottg-token/sendMessage") && tg.body.chat_id === "999", "Telegram: avís enviat al xat configurat");
-check(tg.body.text.includes("Nou encàrrec") && tg.body.text.includes("Cal Fuet") && tg.body.text.includes("Anna")
+check(tg.body.text.includes("Nou encàrrec") && tg.body.text.includes("Tot Bodebón") && tg.body.text.includes("Anna")
   && tg.body.text.includes("+34600000000") && tg.body.text.includes("2 fuets"), "Telegram: l'avís porta tipus, negoci, client, telèfon i resum");
+const okResult = claudeCalls.at(-1).messages.at(-1).content[0];
+check(okResult.content.includes("google.com/search?q=Xarcuteria+Tot+Bodeb"), "ressenya: Claude rep l'enllaç quan l'encàrrec s'ha enviat");
+check(sent.at(-1).body.text.body.includes("ressenya a Google: https://www.google.com/search?q=Xarcuteria+Tot+Bodeb"), "ressenya: si Claude no posa l'enllaç, el codi l'afegeix");
+check(!sent.find((m) => m.body.text.body === `Resposta ${before + 2}` && m.body.text.body.includes("google.com")), "ressenya: sense Telegram (avís no enviat) no es demana ressenya");
 
 for (const mode of ["http", "api", "network"]) {
   telegramMode = mode;
@@ -144,6 +148,7 @@ for (const mode of ["http", "api", "network"]) {
   const result = claudeCalls.at(-1).messages.at(-1).content[0];
   check(result.is_error === true && result.content.includes("No s'ha pogut"), `Telegram: ${mode} no es declara enviat`);
   check(!sent.at(-1).body.text.body.includes("et contactaran"), `Telegram: ${mode} no promet contacte`);
+  check(!sent.at(-1).body.text.body.includes("google.com"), `Telegram: ${mode} no demana ressenya`);
 }
 
 console.log(fails ? `\n${fails} proves fallides` : "\nTotes les proves han passat");
